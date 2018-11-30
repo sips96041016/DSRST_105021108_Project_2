@@ -1,5 +1,5 @@
 #include <fstream>
-#include <iostream>
+#include <string>
 #include <cstdlib>
 #include <queue>
 #include <stack>
@@ -358,14 +358,15 @@ int go_go(int **dist, char **dir, bool **visited, int R_x, int R_y, int n, int m
     return total;
 }
 
-int main(void){
+int main(int argc,char* argv[]){
     int i,j,n,m,k,max_dist,R_x,R_y;
     char c;
     char **dir,*tmpc;
     bool **visited,*tmpb;
     int **dist,*tmp;
+    string str(argv[1]);
     //input
-    fs.open ("floor.data", ios::in );
+    fs.open ("./"+str+"/floor.data", ios::in );
     fs>>n>>m>>max_dist;
 
     dir = new char*[n+2];
@@ -396,7 +397,7 @@ int main(void){
     //find dist
     bfs(dist,dir,visited,R_x,R_y,n,m);
     //output
-    fs.open ("final.path", ios::out );
+    fs.open ("./"+str+"/final.path", ios::out );
     fs<<go_go(dist,dir,visited,R_x,R_y,n,m,max_dist)<<endl;
     while(!que.empty()){ fs<<que.front()-1<<" "; que.pop(); fs<<que.front()-1<<endl; que.pop(); }
     fs.close();
