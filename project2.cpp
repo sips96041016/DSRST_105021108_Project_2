@@ -1,10 +1,11 @@
-#include <iostream>
 #include <fstream>
+#include <iostream>
+#include <cstdlib>
 #include <queue>
 #include <stack>
 #include <utility>
 #include <algorithm>
-#include <iomanip>//setw
+//#include <iomanip>//setw
 #define triple(x,y,z) make_pair(x,make_pair(y,z))
 using namespace std;
 
@@ -24,10 +25,10 @@ const DIR unknown,start_point(0,4);
 
 const char dir_c[4] = {'u','d','l','r'};
 
+fstream fs;
 queue<int> que;
 stack<int> stk[4];// far at top ,near at button
 pair <int,int> lu(0,0),ru(0,0),ld(0,0),rd(0,0),lr(0,0),ud(0,0),zero(0,0);
-
 
 void update_dist_and_pairs(int **dist,char **dir,bool **visited,int x,int y,int a,int b){
     if( dist[a][b]!=-1 ){
@@ -69,7 +70,7 @@ void get_stk_top(int &x,int &y,int k){ x = stk[k].top(); stk[k].pop(); y = stk[k
 
 void update_from(int **dist, char **dir, bool **visited, DIR **from, vector<pair<int,pair<int,int>>> &heap_f,
                  int x, int y, int a, int b, int from_dir, bool limit){
-    if( dist[a][b]!=-1 && dist[a][b]<dist[x][y] && ( !limit || ( ( dir[a][b]=='o' || dir[a][b]==dir[x][y] ) && from[a][b]==unknown ) ) ){
+    if( dist[a][b]!=-1 && dist[a][b]<dist[x][y] && ( !limit || ( ( dir[a][b]=='o' || dir[a][b]==dir[x][y] ) ) ) && from[a][b]==unknown ){
         int v = from[a][b].tot_unvisit = from[x][y].tot_unvisit + !visited[a][b];
         from[a][b].dir = from_dir;
         heap_f.push_back(triple(v,a,b)); push_heap(heap_f.begin(),heap_f.end());
@@ -99,18 +100,20 @@ vector<pair<int,int>> from_R(int **dist, char **dir, bool **visited, DIR **from,
         else if( from[x][y].dir==1 ) x++;
         else if( from[x][y].dir==2 ) y--;
         else if( from[x][y].dir==3 ) y++;
-        else { cout<<from[x][y].dir<<" "<<x<<" "<<y<<" noooooo!!!!!!!"<<endl; break;}
+        else break;
         if( from[x][y] != start_point ) path.push_back(make_pair(x,y));
         else break;
     }
     return path;
 }
 
-bool check_and_insert(int **dist, bool **visited, vector<pair<int,int>> &path,int front_x,int front_y,int back_x,int back_y,int index){
-    if( dist[front_x][front_y]!=-1 && dist[back_x][back_y]!=-1 && !visited[front_x][front_y] && !visited[back_x][back_y] ){
-        vector<pair<int,int>>::iterator it = path.begin();
-        path.insert(it+index,make_pair(back_x,back_y));
-        path.insert(it+index,make_pair(front_x,front_y));
+bool check_and_insert_2(int **dist, bool **visited, vector<pair<int,int>> &path,
+                        int front_x,int front_y,int back_x,int back_y,int index,bool strict){
+    if( dist[front_x][front_y]>0 && dist[back_x][back_y]>0 &&
+        ( ( !visited[front_x][front_y] && !visited[back_x][back_y] ) ||
+        ( !strict && ( !visited[front_x][front_y] || !visited[back_x][back_y] ) ) ) ){
+        path.insert(path.begin()+index,make_pair(back_x,back_y));
+        path.insert(path.begin()+index,make_pair(front_x,front_y));
         visited[front_x][front_y] = true;
         visited[back_x][back_y] = true;
         return true;
@@ -118,22 +121,48 @@ bool check_and_insert(int **dist, bool **visited, vector<pair<int,int>> &path,in
     return false;
 }
 
-bool try_insert_path(int **dist, bool **visited, vector<pair<int,int>> &path,int &index,int &remain_dist,
-                vector<pair<int,int>>::reverse_iterator &rit_n, vector<pair<int,int>>::reverse_iterator &rit){
+bool try_insert_path_2(int **dist, bool **visited, vector<pair<int,int>> &path,int &index,int &remain_dist,
+                vector<pair<int,int>>::reverse_iterator &rit_n, vector<pair<int,int>>::reverse_iterator &rit,bool strict){
     int front_x, front_y, back_x, back_y;
     bool re = false;
     if(rit_n != path.rend()){
         front_x = rit_n->first; front_y = rit_n->second;
         back_x = rit->first; back_y = rit->second;
         if( front_y == back_y ){
-            if(check_and_insert(dist,visited,path,front_x,front_y-1,back_x,back_y-1,index)) re = true;
-            else if(check_and_insert(dist,visited,path,front_x,front_y+1,back_x,back_y+1,index)) re = true;
+            if(check_and_insert_2(dist,visited,path,front_x,front_y-1,back_x,back_y-1,index,strict)) re = true;
+            else if(check_and_insert_2(dist,visited,path,front_x,front_y+1,back_x,back_y+1,index,strict)) re = true;
         }
         else if( front_x == back_x ){
-            if(check_and_insert(dist,visited,path,front_x-1,front_y,back_x-1,back_y,index)) re = true;
-            else if(check_and_insert(dist,visited,path,front_x+1,front_y,back_x+1,back_y,index)) re = true;
+            if(check_and_insert_2(dist,visited,path,front_x-1,front_y,back_x-1,back_y,index,strict)) re = true;
+            else if(check_and_insert_2(dist,visited,path,front_x+1,front_y,back_x+1,back_y,index,strict)) re = true;
         }
         rit++; rit_n++; index--;
+    }
+    if(re) remain_dist-=2;
+    return re;
+}
+
+bool check_and_insert_1(int **dist, bool **visited, vector<pair<int,int>> &path,int cur_x,int cur_y,int ins_x,int ins_y,int index){
+    if( dist[ins_x][ins_y]>0 && !visited[ins_x][ins_y] ){
+        path.insert(path.begin()+index,make_pair(ins_x,ins_y));
+        path.insert(path.begin()+index,make_pair(cur_x,cur_y));
+        visited[ins_x][ins_y] = true;
+        return true;
+    }
+    return false;
+}
+
+bool try_insert_path_1(int **dist, bool **visited, vector<pair<int,int>> &path,int &index,int &remain_dist,
+                       vector<pair<int,int>>::reverse_iterator &rit){
+    int cur_x, cur_y;
+    bool re = false;
+    if(rit != path.rend()){
+        cur_x = rit->first; cur_y = rit->second;
+        if(check_and_insert_1(dist,visited,path,cur_x,cur_y,cur_x-1,cur_y,index)) re = true;
+        else if(check_and_insert_1(dist,visited,path,cur_x,cur_y,cur_x+1,cur_y,index)) re = true;
+        else if(check_and_insert_1(dist,visited,path,cur_x,cur_y,cur_x,cur_y-1,index)) re = true;
+        else if(check_and_insert_1(dist,visited,path,cur_x,cur_y,cur_x,cur_y+1,index)) re = true;
+        rit++; index--;
     }
     if(re) remain_dist-=2;
     return re;
@@ -143,6 +172,7 @@ vector<pair<int,int>> go(int **dist, bool **visited, vector<pair<int,int>> go_pa
                          int x, int y,int remain_dist){
     int i,j;
     bool success = true;
+    vector<pair<int,int>>::iterator it;
     vector<pair<int,int>>::reverse_iterator rit_b,rit_b_n,rit_g,rit_g_n;
     go_path.push_back(make_pair(x,y)); back_path.push_back(make_pair(x,y));
     while( success && remain_dist>1 ){
@@ -150,11 +180,31 @@ vector<pair<int,int>> go(int **dist, bool **visited, vector<pair<int,int>> go_pa
         rit_g = rit_g_n = go_path.rbegin(); rit_b = rit_b_n = back_path.rbegin();
         rit_g_n++; rit_b_n++;
         while( ( rit_b_n != back_path.rend() || rit_g_n != go_path.rend() ) && remain_dist>1 ){
-        cout<<i<<" ";
-            success = try_insert_path(dist,visited,back_path,i,remain_dist,rit_b_n,rit_b);
+            success = try_insert_path_2(dist,visited,back_path,i,remain_dist,rit_b_n,rit_b,true);
             if(remain_dist<=1) break;
-            success = success | try_insert_path(dist,visited,go_path,j,remain_dist,rit_g_n,rit_g);
-            if(success) {cout<<"qaq"<<endl; break;}
+            success = success | try_insert_path_2(dist,visited,go_path,j,remain_dist,rit_g_n,rit_g,true);
+            if(success) break;
+        }
+        if( !success && remain_dist>1 ){
+            i = back_path.size() - 1; j = go_path.size() - 1;
+            rit_g = rit_g_n = go_path.rbegin(); rit_b = rit_b_n = back_path.rbegin();
+            rit_g_n++; rit_b_n++;
+            while( ( rit_b_n != back_path.rend() || rit_g_n != go_path.rend() ) && remain_dist>1 ){
+                success = try_insert_path_2(dist,visited,back_path,i,remain_dist,rit_b_n,rit_b,false);
+                if(remain_dist<=1) break;
+                success = success | try_insert_path_2(dist,visited,go_path,j,remain_dist,rit_g_n,rit_g,false);
+                if(success) break;
+            }
+        }
+        if( !success && remain_dist>1 ){
+            i = back_path.size() - 1; j = go_path.size() - 1;
+            rit_g = go_path.rbegin(); rit_b = back_path.rbegin();
+            while( ( rit_b != back_path.rend() || rit_g != go_path.rend() ) && remain_dist>1 ){
+                success = try_insert_path_1(dist,visited,back_path,i,remain_dist,rit_b);
+                if(remain_dist<=1) break;
+                success = success | try_insert_path_1(dist,visited,go_path,j,remain_dist,rit_g);
+                if(success) break;
+            }
         }
     }
     back_path.pop_back();
@@ -164,21 +214,21 @@ vector<pair<int,int>> go(int **dist, bool **visited, vector<pair<int,int>> go_pa
 }
 
 vector<pair<int,int>> turn_path(int **dist, char **dir, bool **visited, DIR **from, int R_x, int R_y, int x, int y, int n, int m,
-                                char a, char b){
+                                char a, char b, bool limit){
     vector<pair<int,int>> p1,p2;
     dir[x][y] = a;
     p1 = from_R(dist,dir,visited,from,R_x,R_y,x,y,n,m,true); p1.push_back(make_pair(x,y));
-    for (vector<pair<int,int>>::iterator it = p1.begin() ; it != p1.end(); ++it) visited[it->first][it->second] = true;
+    for (vector<pair<int,int>>::iterator it = p1.begin() ; it != p1.end(); ++it) if(limit) visited[it->first][it->second] = true;
     dir[x][y] = b;
     p2 = from_R(dist,dir,visited,from,R_x,R_y,x,y,n,m,true);
     for (vector<pair<int,int>>::reverse_iterator rit = p2.rbegin() ; rit != p2.rend(); ++rit)
-        { visited[rit->first][rit->second] = true; p1.push_back((*rit)); }
+        { if(limit) visited[rit->first][rit->second] = true; p1.push_back((*rit)); }
     return p1;
 }
 
 int go_go(int **dist, char **dir, bool **visited, int R_x, int R_y, int n, int m, int max_dist){
     int i,j,k,x,y,total = 0;
-    int in_x,in_y,choose,min_len,cur_len;
+    int in_x,in_y,choose,min_len,cur_len, max_stk;
     bool check[4][4] = { { !stk[0].empty() , ( ud!=zero ) , ( lu!=zero ) , ( ru!=zero ) } ,
                         { ( ud!=zero ) , !stk[1].empty() , ( ld!=zero ) , ( rd!=zero ) } ,
                         { ( lu!=zero ) , ( ld!=zero ) , !stk[2].empty() , ( lr!=zero ) } ,
@@ -187,10 +237,12 @@ int go_go(int **dist, char **dir, bool **visited, int R_x, int R_y, int n, int m
     for(i=0;i<4;i++) for(j=0;j<4;j++) how_go[i][j] = ( check[i][j] && i!=j ) ? j : -1 ;
     for(k=0;k<4;k++) for(i=0;i<4;i++) for(j=0;j<4;j++)
         if( i!=j && how_go[i][k]!=-1 && how_go[k][j]!=-1 && how_go[i][j]==-1 ) how_go[i][j] = how_go[i][k];
+    bool limit = false;//first go turn_path?
     bool finish[4][4] ={{ true, ( ud==zero ), ( lu==zero ), ( ru==zero )},
                         { ( ud==zero ), true, ( ld==zero ), ( rd==zero )},
                         { ( lu==zero ), ( ld==zero ), true, ( lr==zero )},
                         { ( ru==zero ), ( rd==zero ), ( lr==zero ), true}};
+    if(!limit) for(i=0;i<4;i++) for(j=0;j<4;j++) finish[i][j] = true;
     DIR **from = new DIR*[n+2];
     DIR *tmpf = new DIR[(n+2)*(m+2)];
     for(i=0;i<n+2;i++) from[i] = &(tmpf[i*(m+2)]);
@@ -203,22 +255,28 @@ int go_go(int **dist, char **dir, bool **visited, int R_x, int R_y, int n, int m
     vector<pair<int,int>>::iterator it;
     vector<pair<int,int>>::reverse_iterator rit;
     char direction = 'u';
+    max_stk = max(max(stk[0].size(),stk[1].size()),max(stk[2].size(),stk[3].size()));
+    for(i=0;i<4;i++) if(stk[i].size()==max_stk) direction = dir_c[i];
     for(i=1;i<=n;i++) for(j=1;j<=m;j++) visited[i][j] = false;
     visited[R_x][R_y] = true;
 
-    if( lu!=zero ) lu_path = turn_path(dist,dir,visited,from,R_x,R_y,lu.first,lu.second,n,m,'l','u');//l to u
-    if( ru!=zero ) ru_path = turn_path(dist,dir,visited,from,R_x,R_y,ru.first,ru.second,n,m,'r','u');//r to u
-    if( ld!=zero ) ld_path = turn_path(dist,dir,visited,from,R_x,R_y,ld.first,ld.second,n,m,'l','d');//l to d
-    if( rd!=zero ) rd_path = turn_path(dist,dir,visited,from,R_x,R_y,rd.first,rd.second,n,m,'r','d');//r to d
-    if( lr!=zero ) lr_path = turn_path(dist,dir,visited,from,R_x,R_y,lr.first,lr.second,n,m,'r','l');//r to l
-    if( ud!=zero ) ud_path = turn_path(dist,dir,visited,from,R_x,R_y,ud.first,ud.second,n,m,'d','u');//d to u
-    //for(i=0;i<=3;i++) { for(j=0;j<=2;j++) cout<<setw(2)<<how_go[i][j]<<" "; cout<<setw(2)<<how_go[i][j]<<endl;}
+    if( lu!=zero ) lu_path = turn_path(dist,dir,visited,from,R_x,R_y,lu.first,lu.second,n,m,'l','u',limit);//l to u
+    if( ru!=zero ) ru_path = turn_path(dist,dir,visited,from,R_x,R_y,ru.first,ru.second,n,m,'r','u',limit);//r to u
+    if( ld!=zero ) ld_path = turn_path(dist,dir,visited,from,R_x,R_y,ld.first,ld.second,n,m,'l','d',limit);//l to d
+    if( rd!=zero ) rd_path = turn_path(dist,dir,visited,from,R_x,R_y,rd.first,rd.second,n,m,'r','d',limit);//r to d
+    if( lr!=zero ) lr_path = turn_path(dist,dir,visited,from,R_x,R_y,lr.first,lr.second,n,m,'r','l',limit);//r to l
+    if( ud!=zero ) ud_path = turn_path(dist,dir,visited,from,R_x,R_y,ud.first,ud.second,n,m,'d','u',limit);//d to u
 
     while(1){
         for(k=0;k<4;k++) if( direction == dir_c[k] ) break;
         x=R_x; y=R_y;
         while ( visited[x][y] && !stk[k].empty() ) get_stk_top(x,y,k);
         if(stk[k].empty()) {
+            for(i=0;i<4;i++) {
+                x=R_x; y=R_y;
+                while( visited[x][y] && !stk[i].empty() ) get_stk_top(x,y,i);
+                if(!stk[i].empty()) {stk[i].push(y); stk[i].push(x);}
+            }
             choose = 4; min_len = -1;
             for(i=0;i<4;i++) {
                 if( !stk[i].empty() && how_go[k][i]!=-1 ) {
@@ -240,10 +298,10 @@ int go_go(int **dist, char **dir, bool **visited, int R_x, int R_y, int n, int m
                 while( how_go[k][i] != -1) {
                     go_path = *path[k][how_go[k][i]]; finish[k][how_go[k][i]] = finish[how_go[k][i]][k] = true;
                     if(k>how_go[k][i]) for (it = go_path.begin() ; it != go_path.end(); ++it)
-                        { cout<<it->first<<" "<<it->second<<endl; total++; }
+                        { que.push(it->first); que.push(it->second); total++; }
                     else for (rit = go_path.rbegin() ; rit != go_path.rend(); ++rit)
-                        { cout<<rit->first<<" "<<rit->second<<endl; total++; }
-                    cout<<R_x<<" "<<R_y<<"       11111111111111"<<endl; total++;
+                        { que.push(rit->first); que.push(rit->second); total++; }
+                    que.push(R_x); que.push(R_y);
                     k = how_go[k][i];
                 }
                 direction = dir_c[i];
@@ -255,40 +313,42 @@ int go_go(int **dist, char **dir, bool **visited, int R_x, int R_y, int n, int m
         for (it = go_path.begin() ; it != go_path.end(); ++it) visited[it->first][it->second] = true;
         back_path = from_R(dist,dir,visited,from,R_x,R_y,x,y,n,m);
         for (it = back_path.begin() ; it != back_path.end(); ++it) visited[it->first][it->second] = true;
+        visited[x][y] = true;
 
         total_path = go(dist,visited,go_path,back_path,x,y,max_dist-2*dist[x][y]);
 
-        for (it = total_path.begin() ; it != total_path.end(); ++it){ cout<<it->first<<" "<<it->second<<endl; total++; }
-        cout<<R_x<<" "<<R_y<<"       222222222222"<<endl; total++;
+        for (it = total_path.begin() ; it != total_path.end(); ++it){ que.push(it->first); que.push(it->second); total++; }
+        que.push(R_x); que.push(R_y);
         if( back_path.empty() ) { in_x = x; in_y = y; }
         else { in_x = back_path.front().first; in_y = back_path.front().second; }
         if( in_x == R_x-1 && in_y == R_y ) direction = 'u';
         else if( in_x == R_x+1 && in_y == R_y ) direction = 'd';
         else if( in_x == R_x && in_y == R_y-1 ) direction = 'l';
         else if( in_x == R_x && in_y == R_y+1 ) direction = 'r';
-        else { cout<<"no!!!!!!ewuisdhsklhfjk"<<endl; break; }
+        else break;
     }
 
-    for(i=0;i<4;i++) { for(j=0;j<4;j++) if(!finish[i][j]) break; if(!finish[i][j]) break; }
+    //if not limit ,not use
+    for(i=0;i<4;i++) { for(j=0;j<4;j++) if(!finish[i][j]) break; if( j<4 && !finish[i][j] ) break; }
     while( i!=4 || j!=4 ){
         for(k=0;k<4;k++) if( direction == dir_c[k] ) break;
         while( how_go[k][i] != -1) {
             go_path = *path[k][how_go[k][i]]; finish[k][how_go[k][i]] = finish[how_go[k][i]][k] = true;
             if(k>how_go[k][i]) for (it = go_path.begin() ; it != go_path.end(); ++it)
-                { cout<<it->first<<" "<<it->second<<endl; total++; }
+                { que.push(it->first); que.push(it->second); total++; }
             else for (rit = go_path.rbegin() ; rit != go_path.rend(); ++rit)
-                { cout<<rit->first<<" "<<rit->second<<endl; total++; }
-            cout<<R_x<<" "<<R_y<<"       11111111111111"<<endl; total++;
+                { que.push(rit->first); que.push(rit->second); total++; }
+            que.push(R_x); que.push(R_y); total++;
             k = how_go[k][i];
             if(finish[i][j]) break;
         }
         if(!finish[i][j]){
             go_path = *path[k][j]; finish[k][j] = finish[j][k] = true;
             if(k>j) for (it = go_path.begin() ; it != go_path.end(); ++it)
-                { cout<<it->first<<" "<<it->second<<endl; total++; }
+                { que.push(it->first); que.push(it->second); total++; }
             else for (rit = go_path.rbegin() ; rit != go_path.rend(); ++rit)
-                { cout<<rit->first<<" "<<rit->second<<endl; total++; }
-            cout<<R_x<<" "<<R_y<<"       11111111111111"<<endl; total++;
+                { que.push(rit->first); que.push(rit->second); total++; }
+            que.push(R_x); que.push(R_y); total++;
             direction = dir_c[j];
         }
         for(i=0;i<4;i++) { for(j=0;j<4;j++) if(!finish[i][j]) break; if(!finish[i][j]) break; }
@@ -305,8 +365,7 @@ int main(void){
     bool **visited,*tmpb;
     int **dist,*tmp;
     //input
-    fstream fs;
-    fs.open ("floor_5.data", ios::in );
+    fs.open ("floor.data", ios::in );
     fs>>n>>m>>max_dist;
 
     dir = new char*[n+2];
@@ -336,17 +395,11 @@ int main(void){
     fs.close();
     //find dist
     bfs(dist,dir,visited,R_x,R_y,n,m);
-    /*
-    cout<<lu.first<<" "<<lu.second<<endl;
-    cout<<ld.first<<" "<<ld.second<<endl;
-    cout<<ru.first<<" "<<ru.second<<endl;
-    cout<<rd.first<<" "<<rd.second<<endl;
-    for(i=1;i<=n;i++) { for(j=1;j<=m-1;j++) cout<<setw(2)<<dir[i][j]<<" "; cout<<setw(2)<<dir[i][j]<<endl;}
-    for(i=1;i<=n;i++) { for(j=1;j<=m-1;j++) cout<<setw(2)<<dist[i][j]<<" "; cout<<setw(2)<<dist[i][j]<<endl;}
-    */
-    cout<<go_go(dist,dir,visited,R_x,R_y,n,m,max_dist)<<endl;
-
-    //while(!stk[0].empty()){ cout<<stk[0].top()<<" "; stk[0].pop(); cout<<stk[0].top()<<endl; stk[0].pop(); }
+    //output
+    fs.open ("final.path", ios::out );
+    fs<<go_go(dist,dir,visited,R_x,R_y,n,m,max_dist)<<endl;
+    while(!que.empty()){ fs<<que.front()-1<<" "; que.pop(); fs<<que.front()-1<<endl; que.pop(); }
+    fs.close();
     delete [] tmp; delete [] dist; delete [] tmpc; delete [] dir; delete [] tmpb; delete [] visited;
     return 0;
 }
